@@ -12,7 +12,8 @@ template <bool kPadM_,
           bool kPadK_,
           typename ALayout_,
           typename BLayout_,
-          typename CLayout_>
+          typename CLayout_,
+          typename Elayout>
 struct TileGemmTraits
 {
     static constexpr bool kPadM = kPadM_;

@@ -19,6 +19,34 @@
 
 namespace {
 
+struct TileSettings {
+
+};
+
+struct WrapSettings {
+
+};
+
+struct WrapTileSettings {
+
+};
+
+class SeqNamespace { 
+    protected:
+    using Seq = ck_tile::sequence;
+};
+
+template <typename T = TileShape()> class TileShape : public SeqNamespace {
+  using shape = Seq<T::M_Tile, T::N_Tile, T::K_Tile>;
+};
+template <typename T> class WrapShape : public SeqNamespace {
+  using shape = Seq<T::M_Warp, T::N_Warp, T::K_Warp>;
+};
+
+template <typename T> class WrapTileShape : public SeqNamespace {
+  using shape = Seq<T::M_Warp_Tile, T::N_Warp_Tile, T::K_Warp_Tile>
+};
+
 template <typename ALayout,
           typename BLayout,
           typename DsLayout,
@@ -39,72 +67,23 @@ float multiple_d_gemm(const void* a_m_k_dev_buf,
                       ck_tile::AddAdd& cde_element_op,
                       const ck_tile::stream_config& s)
 {
-    // The kPadM, kPadN, kPadK & kBlockPerCu should also come from the Codegen part.
-    constexpr bool kPadM        = false;
-    constexpr bool kPadN        = false;
-    constexpr bool kPadK        = false;
-    constexpr bool kTilePermute = false;
-    // The rank and permutation will also be generate out by the CodeGen part.
-    constexpr ck_tile::index_t kOutputRank = 2;
+    using code_gen_tile_shape = ck_tile::TileGemmShape<
+            TileShape<T>::shape,
+            WrapShape<T>::shape,
+            WrapTileShape<T>::shape
+    >;
 
-    constexpr int kBlockPerCu = 1;
+    using f_partitioner = ck_tile::GemmTile1DPartitioner<CodegenGemmShape>;
 
-    // This part comes from the Codegen
-    constexpr ck_tile::index_t M_Tile = 128;
-    constexpr ck_tile::index_t N_Tile = 128;
-    constexpr ck_tile::index_t K_Tile = 32;
+    template <typename ALayout, typename BLayout, typename CLayout>
+    using CodegenGemmTraits = ck_tile::TileGemmTraits<GroupedGemmKernelParam::kPadM,
+                                                    GroupedGemmKernelParam::kPadN,
+                                                    GroupedGemmKernelParam::kPadK,
+                                                    ALayout,
+                                                    BLayout,
+                                                    CLayout>;
 
-    constexpr ck_tile::index_t M_Warp = 2;
-    constexpr ck_tile::index_t N_Warp = 2;
-    constexpr ck_tile::index_t K_Warp = 1;
-
-    constexpr ck_tile::index_t M_Warp_Tile = 32;
-    constexpr ck_tile::index_t N_Warp_Tile = 32;
-    constexpr ck_tile::index_t K_Warp_Tile = 8;
-
-    // Whether doing the CShuffle (transpose before the global memory), depending on the output
-    // layout.
-    constexpr bool CShuffleEpilogue =
-        std::is_same_v<CLayout, ck_tile::tensor_layout::gemm::ColumnMajor>;
-
-    using CodegenGemmShape =
-        ck_tile::TileGemmShape<ck_tile::sequence<M_Tile, N_Tile, K_Tile>,
-                               ck_tile::sequence<M_Warp, N_Warp, K_Warp>,
-                               ck_tile::sequence<M_Warp_Tile, N_Warp_Tile, K_Warp_Tile>>;
-
-    using TilePartitioner = ck_tile::GemmTilePartitioner<CodegenGemmShape>;
-
-    using GemmEpilogue = std::conditional_t<
-        CShuffleEpilogue,
-        ck_tile::CShuffleEpilogue<ck_tile::CShuffleEpilogueProblem<AccDataType,
-                                                                   CDataType,
-                                                                   kPadM,
-                                                                   kPadN,
-                                                                   kTilePermute,
-                                                                   kOutputRank,
-                                                                   1,
-                                                                   0,
-                                                                   TilePartitioner::kM,
-                                                                   TilePartitioner::kN>>,
-        ck_tile::Default2DEpilogue<
-            ck_tile::Default2DEpilogueProblem<AccDataType, CDataType, kPadM, kPadN>>>;
-
-    using CodegenGemmTraits =
-        ck_tile::TileGemmTraits<kPadM, kPadN, kPadK, ALayout, BLayout, CLayout>;
-    using CodegenPipelineProblem = ck_tile::
-        GemmPipelineProblem<ADataType, BDataType, AccDataType, CodegenGemmShape, CodegenGemmTraits>;
-    using CodegenGemmPolicy = ck_tile::UniversalGemmPipelineAgBgCrPolicy;
-    using CodegenGemmPipeline =
-        ck_tile::GemmPipelineAGmemBGmemCRegV1<CodegenPipelineProblem, CodegenGemmPolicy>;
-    // ToDo: Will add the codegen part to test different pipeline policies in GEMM.
-    // Now we only use the BlockGemmASmemBSmemCRegV1DefaultPolicy.
-    using Kernel = ck_tile::BatchedGemmKernel<TilePartitioner, CodegenGemmPipeline, GemmEpilogue>;
-
-    auto kargs = Kernel::MakeKernelArgs(args);
-
-    const dim3 grids      = Kernel::GridSize(args.M, args.N, args.k_batch, args.batch_count);
-    constexpr dim3 blocks = Kernel::BlockSize();
-
+    using f_kernel = ck_tile::MultipleDGemmKernel<f_paritioner, f_pipeline, f_epilog>
     if(!Kernel::IsSupportedArgument(kargs))
     {
         throw std::runtime_error("Wrong! Arguments not supported! Skipping gemm!\n");

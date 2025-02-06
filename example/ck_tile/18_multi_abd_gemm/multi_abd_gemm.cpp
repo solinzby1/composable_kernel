@@ -17,41 +17,79 @@
 #include "grouped_gemm.hpp"
 #include "utils.hpp"
 
-namespace {
+inline namespace {
 
-struct TileSettings {
-
+/**
+ * @brief Settings enum for Tile
+ */
+enum class TileSetting : int {
+  M = 128,
+  N = 128,
+  K = 32,
 };
 
-struct WrapSettings {
-
+/**
+ * @brief Settings enum for Tile
+ */
+enum class WrapSetting : int {
+  M = 2,
+  N = 2,
+  K = 1,
 };
 
-struct WrapTileSettings {
-
+/**
+ * @brief Settings enum for Tile
+ */
+enum class WrapTileSetting : int {
+  M = 32,
+  N = 32,
+  K = 8,
 };
 
-class SeqNamespace { 
-    protected:
-    using Seq = ck_tile::sequence;
+/**
+ * @brief The kPadM, kPadN, kPadK & kBlockPerCu 
+ *        should also come from the Codegen part.
+ */
+enum class CodeGenPart : bool {
+    kPadM = false;
+    kPadN = false;
+    kPadK = false;
 };
 
-template <typename T = TileShape()> class TileShape : public SeqNamespace {
-  using shape = Seq<T::M_Tile, T::N_Tile, T::K_Tile>;
-};
-template <typename T> class WrapShape : public SeqNamespace {
-  using shape = Seq<T::M_Warp, T::N_Warp, T::K_Warp>;
+class SequenceMapper {
+  protected:
+  using Seq = ck_tile::sequence; 
+}
+/**
+ * @brief Wrapper to keep the shape for a given settings
+ */
+template <typename T = TileSetting> class TileShape : public SequenceMapper {
+  using shape = Seq<T::M, T::N, T::K>;
 };
 
-template <typename T> class WrapTileShape : public SeqNamespace {
-  using shape = Seq<T::M_Warp_Tile, T::N_Warp_Tile, T::K_Warp_Tile>
+/**
+ * @brief Wrapper to keep the shape for a given settings
+ */
+template <typename T = WrapSetting> class WrapShape : public SequenceMapper {
+  using shape = Seq<T::M, T::N, T::K>;
 };
 
+/**
+ * @brief Wrapper to keep the shape for a given settings
+ */
+template <typename T = WrapTileSetting> class WrapTileShape : public SequenceMapper {
+  using shape = Seq<T::M, T::N, T::K>;
+};
+
+/**
+ * @brief Function to run multiple_gemm with multiple D
+ * 
+ */
 template <typename ALayout,
           typename BLayout,
           typename DsLayout,
           typename ELayout>
-float multiple_d_gemm(const void* a_m_k_dev_buf,
+auto multiple_d_gemm(const void* a_m_k_dev_buf,
                       const void* b_k_n_dev_buf,
                       std::array<const void*, 2>& d_m_n_dev_buf,
                       const void* e_m_n_dev_buf,
@@ -65,25 +103,40 @@ float multiple_d_gemm(const void* a_m_k_dev_buf,
                       ck_tile::PassThrough& a_element_op,
                       ck_tile::PassThrough& b_element_op,
                       ck_tile::AddAdd& cde_element_op,
-                      const ck_tile::stream_config& s)
+                      const ck_tile::stream_config& s) -> float
 {
-    using code_gen_tile_shape = ck_tile::TileGemmShape<
-            TileShape<T>::shape,
-            WrapShape<T>::shape,
-            WrapTileShape<T>::shape
-    >;
+  using f_code_gemm_traits 
+        = ck_tile::TileGemmTraits<kPadM, kPadN, kPadK, ALayout, BLayout, DsLayout, ELayout>;
+  using f_shape 
+        = ck_tile::TileGemmShape<TileShape::shape, WrapShape::shape, WrapTileShape::shape>;
 
-    using f_partitioner = ck_tile::GemmTile1DPartitioner<CodegenGemmShape>;
+  // TODO(mozga-amd): MutlipleGemm Pipeline requires impl
+  using f_code_gemm_pipeline = ck_tile::MutlipleGemmPipelineProblem<
+            ADataType,
+            BDataType, 
+            DDataType, 
+            AccDataType,
+            f_element_wise_a, 
+            f_element_wise_b,
+            f_element_wise_abd,
+            f_shape, 
+            f_code_gemm_traits>;
 
-    template <typename ALayout, typename BLayout, typename CLayout>
-    using CodegenGemmTraits = ck_tile::TileGemmTraits<GroupedGemmKernelParam::kPadM,
-                                                    GroupedGemmKernelParam::kPadN,
-                                                    GroupedGemmKernelParam::kPadK,
-                                                    ALayout,
-                                                    BLayout,
-                                                    CLayout>;
+  using f_gemm_epilogue =
+      ck_tile::CShuffleEpilogue<
+        ck_tile::CShuffleEpilogueProblem<
+            AccDataType, EDataType, ELayout, 
+            CodegenPipelineProblem::kBlockSize,
+            TilePartitioner::MPerBlock, TilePartitioner::NPerBlock,
+            WrapSettings::M_Warp, WrapSettings::N_Warp,
+            WrapTileSettings::M_Warp_Tile, WrapTileSettings::N_Warp_Tile,
+            WrapTileSettings::K_Warp_Tile, f_code_gemm_pipeline::TransposeC>
+        >;
+    
+    // 2D partitioner for that
+    using f_partitioner = ck_tile::GemmTile1DPartitioner<f_shape>;
+    using f_kernel = ck_tile::MultipleDGemmKernel<f_paritioner, f_code_gemm_pipeline, f_epilog>;
 
-    using f_kernel = ck_tile::MultipleDGemmKernel<f_paritioner, f_pipeline, f_epilog>
     if(!Kernel::IsSupportedArgument(kargs))
     {
         throw std::runtime_error("Wrong! Arguments not supported! Skipping gemm!\n");

@@ -132,8 +132,10 @@ template <typename ADataType_,
           typename EDataType_,
           typename BlockGemmShape_,
           typename Traits_>
-using GemmPipelineProblem =
-    GemmPipelineProblemBase<ADataType_, BDataType_, DDataType_, EDataType_, BlockGemmShape_, Traits_>;
+using MutlipleGemmPipelineProblem =
+    GemmPipelineProblemBase<ADataType_, BDataType_, DDataType_, EDataType_, BlockGemmShape_, Traits_> {
+        
+    }
 
 // Alias for GemmPipelineProblem
 template <typename ADataType_,

@@ -85,6 +85,7 @@ template <typename T = WrapTileSetting> class WrapTileShape : public SequenceMap
  * @brief Function to run multiple_gemm with multiple D
  * 
  */
+
 template <typename ALayout,
           typename BLayout,
           typename DsLayout,
@@ -116,9 +117,9 @@ auto multiple_d_gemm(const void* a_m_k_dev_buf,
             BDataType, 
             DDataType, 
             AccDataType,
-            f_element_wise_a, 
-            f_element_wise_b,
-            f_element_wise_abd,
+            f_element_wise_a, // Old ck works only when A element wise is PassThrough
+            f_element_wise_b, // Old ck works only when B element wise is PassThrough
+            f_element_wise_abd, // Old ck works for each of them
             f_shape, 
             f_code_gemm_traits>;
 

@@ -85,7 +85,6 @@ template <typename T = WrapTileSetting> class WrapTileShape : public SequenceMap
  * @brief Function to run multiple_gemm with multiple D
  * 
  */
-
 template <typename ALayout,
           typename BLayout,
           typename DsLayout,
@@ -106,10 +105,10 @@ auto multiple_d_gemm(const void* a_m_k_dev_buf,
                       ck_tile::AddAdd& cde_element_op,
                       const ck_tile::stream_config& s) -> float
 {
-  using f_code_gemm_traits 
-        = ck_tile::TileGemmTraits<kPadM, kPadN, kPadK, ALayout, BLayout, DsLayout, ELayout>;
-  using f_shape 
-        = ck_tile::TileGemmShape<TileShape::shape, WrapShape::shape, WrapTileShape::shape>;
+  // @breif Multiple G gem taks 4 arguments
+  using f_code_gemm_traits  = ck_tile::TileGemmTraits<kPadM, kPadN, kPadK, ALayout, BLayout, DsLayout, ELayout>;
+  //  @breif Get shapes
+  using f_shape  = ck_tile::TileGemmShape<TileShape::shape, WrapShape::shape, WrapTileShape::shape>;
 
   // TODO(mozga-amd): MutlipleGemm Pipeline requires impl
   using f_code_gemm_pipeline = ck_tile::MutlipleGemmPipelineProblem<

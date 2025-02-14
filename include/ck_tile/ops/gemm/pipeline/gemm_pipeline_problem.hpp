@@ -125,18 +125,6 @@ struct GemmPipelineProblemBase
     }();
 };
 
-// Alias for MutlipleGemmPipelineProblem 
-template <typename ADataType_,
-          typename BDataType_,
-          typename DDataType_
-          typename EDataType_,
-          typename BlockGemmShape_,
-          typename Traits_>
-using MutlipleGemmPipelineProblem =
-    GemmPipelineProblemBase<ADataType_, BDataType_, DDataType_, EDataType_, BlockGemmShape_, Traits_> {
-        
-    }
-
 // Alias for GemmPipelineProblem
 template <typename ADataType_,
           typename BDataType_,

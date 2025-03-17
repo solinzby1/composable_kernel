@@ -11,8 +11,8 @@ namespace ck_tile {
 
 template <typename AccDataType_,
 typename ODataType_,
-typename DDataType_,
-typename DLayout_,
+typename DsDataType_,
+typename DsLayout_,
 typename CLayout_,
 typename ABDELementWise_,
 index_t kBlockSize_,
@@ -28,8 +28,8 @@ struct MultipleDCShuffleEpilogueProblem
 {
     using AccDataType                      = remove_cvref_t<AccDataType_>;
     using ODataType                        = remove_cvref_t<ODataType_>;
-    using DDataType                        = remove_cvref_t<DDataType_>;
-    using DLayout                          = remove_cvref_t<DLayout_>;
+    using DsDataType                        = remove_cvref_t<DsDataType_>;
+    using DsLayout                          = remove_cvref_t<DsLayout_>;
     using CLayout                          = remove_cvref_t<CLayout_>;
     using ABDELementWise                   = remove_cvref_t<ABDELementWise_>;
     static constexpr index_t kBlockSize    = kBlockSize_;
@@ -41,6 +41,7 @@ struct MultipleDCShuffleEpilogueProblem
     static constexpr index_t kNPerXdl      = kNPerXdl_;
     static constexpr index_t kKPerXdl      = kKPerXdl_;
     static constexpr index_t isCTransposed = isCTransposed_;
+    static constexpr index_t NumDTensor    = DsDataType::size();
 }; 
 
 template <typename Problem_, typename Policy_ = void>
@@ -51,8 +52,8 @@ struct MultipleDCShuffleEpilogue
     using AccDataType                       = remove_cvref_t<typename Problem::AccDataType>;
     using ODataType                         = remove_cvref_t<typename Problem::ODataType>;
     using CLayout                           = remove_cvref_t<typename Problem::CLayout>;
-    using DDataType                         = remove_cvref_t<typename Problem::DDataType>;
-    using DLayout                           = remove_cvref_t<typename Problem::DLayout>;
+    using DsDataType                        = remove_cvref_t<typename Problem::DsDataType>;
+    using DsLayout                          = remove_cvref_t<typename Problem::DsLayout>;
     using ABDELementWise                    = remove_cvref_t<typename Problem::ABDELementWise>;
     static constexpr index_t kBlockSize     = Problem::kBlockSize;
     static constexpr index_t kMPerBlock     = Problem::kMPerBlock;
@@ -63,6 +64,7 @@ struct MultipleDCShuffleEpilogue
     static constexpr index_t kNPerXdl       = Problem::kNPerXdl;
     static constexpr index_t kKPerXdl       = Problem::kKPerXdl;
     static constexpr index_t isCTransposed  = Problem::isCTransposed;
+    static constexpr index_t NumDTensor     = Problem::NumDTensor;
     static constexpr index_t kMPerIteration = kMPerXdl * kMWave;
     static constexpr index_t kNPerIteration = kNPerXdl * kNWave;
 
@@ -96,7 +98,7 @@ struct MultipleDCShuffleEpilogue
     CK_TILE_HOST_DEVICE static constexpr auto GetVectorSizeD()
     {
         constexpr index_t MaxVectorStoreSize = 16;
-        return MaxVectorStoreSize / sizeof(DDataType);
+        return MaxVectorStoreSize / sizeof(ODataType);
     }
 
     template <typename Problem>
@@ -150,11 +152,12 @@ struct MultipleDCShuffleEpilogue
                              make_tuple(number<kMWave * kMPerXdl>{}, number<kNWave * kNPerXdl>{}),
                              {0, 0});
                 
-        
-        auto dut_lds_window =
-                             make_tile_window(d_dram_window,
-                                              make_tuple(number<kMWave * kMPerXdl>{}, number<kNWave * kNPerXdl>{}),
-                                              {0, 0});
+        // auto d_dram_small_window = generate_tuple(
+        //     [&](auto idx) {
+        //         return make_tile_window(d_dram_window[idx],
+        //             make_tuple(number<kMWave * kMPerXdl>{}, number<kNWave * kNPerXdl>{}),
+        //             {0, 0});
+        //     }, number<NumDTensor>{});
 
         using SFC                    = space_filling_curve<sequence<kMPerBlock, kNPerBlock>,
                                         sequence<0, 1>,
@@ -168,10 +171,6 @@ struct MultipleDCShuffleEpilogue
                                               GetVectorSizeD(),
                                               tile_distribution_pattern::thread_raked>;
         constexpr auto dram_tile_distribution = TileEncodingPattern::Make2DStaticTileDistribution();
-
-        //using d_vgpr = decltype(load_tile(make_tile_window(d_dram_window, dram_tile_distribution)));
-
-        //d_vgpr d_tensor;
 
         constexpr auto c_warp_y_lengths =
             to_sequence(CWarpDstr{}.get_ys_to_d_descriptor().get_lengths());
@@ -195,27 +194,33 @@ struct MultipleDCShuffleEpilogue
             block_sync_lds();
 
             const auto c_out_tensor = load_tile(make_tile_window(out_lds_window, dram_tile_distribution));
-            //if (blockIdx.x == 0 && threadIdx.x == 0)
-            //printf("Przed ladowaniem\n");
-            const auto dd = load_tile(make_tile_window(dut_lds_window, dram_tile_distribution));
-            if (threadIdx.x < 128) {
-                //printf("Po ladowaniem\n");
-                //printf("%d %d %f\n", threadIdx.x, blockIdx.x, static_cast<float>(dd.get_thread_buffer()[number<0>{}]));
-             }
+
+            // const auto ds_tensor = generate_tuple(
+            //     [&](auto idx) {
+            //         return load_tile(make_tile_window(d_dram_small_window[idx], dram_tile_distribution));
+            //     }, number<NumDTensor>{});
+            
+            // // tuple of reference to C/Ds tensor descriptors
+            // const auto c_ds_tiles = concat_tuple_of_reference(
+            //     tie(c_out_tensor),
+            //     generate_tie(
+            //         [&](auto i) -> const auto& // return type should be reference
+            //             { return ds_tensor[i]; },
+            //         number<NumDTensor>{})
+            // );
             
             const auto multi_d_out_element_wise 
-                = tile_elementwise_in([&]([[maybe_unused]] const auto& c, [[maybe_unused]] const auto& d) {
-                    const float ft = c + d;
-                    return ck_tile::type_convert<ODataType>(ft);
-
-            }, c_out_tensor, dd);
+                = tile_elementwise_in([&]([[maybe_unused]] const auto& in1, [[maybe_unused]] const auto& in2) {
+                    float res = in1; 
+                    // static_for<1, NumDTensor, 1>{}([&](auto idx) {
+                    //     res += in[idx];
+                    // });
+                    return ck_tile::type_convert<ODataType>(res);
+            }, c_out_tensor, c_out_tensor);
 
 
             if (out_memory_data_op == memory_operation_enum::set)
             {
-                //if (blockIdx.x == 0 && threadIdx.x == 0)
-                //printf("Przed zapisem\n");
-                //if (threadIdx.x < 128) {
                 store_tile(out_dram_window, multi_d_out_element_wise);
             }
             else
@@ -225,9 +230,12 @@ struct MultipleDCShuffleEpilogue
             if constexpr(iAccess != num_access - 1)
             {
                 constexpr auto step = SFC::get_forward_step(iAccess);
-                move_tile_window(out_dram_window, {step.at(number<0>{}), step.at(number<1>{})});
-                move_tile_window(dut_lds_window, {step.at(number<0>{}), step.at(number<1>{})});
 
+                move_tile_window(out_dram_window, {step.at(number<0>{}), step.at(number<1>{})});
+
+                // static_for<0, NumDTensor, 1>{}([&](auto idx) {
+                //     move_tile_window(d_dram_small_window[idx], {step.at(number<0>{}), step.at(number<1>{})});
+                // });
             }
         });
     }

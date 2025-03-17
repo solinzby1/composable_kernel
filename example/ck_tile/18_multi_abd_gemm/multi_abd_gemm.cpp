@@ -89,7 +89,7 @@ struct WrapTileShape
  * @brief Function to run multiple_gemm with multiple D
  *
  */
-template <typename ALayout, typename BLayout, typename DLayout, typename CLayout>
+template <typename ALayout, typename BLayout, typename DsLayout, typename CLayout>
 auto multiple_d_gemm(const multi_d_gemm_kargs& args,
                      [[maybe_unused]] ck_tile::element_wise::PassThrough& f_element_wise_a,
                      [[maybe_unused]] ck_tile::element_wise::PassThrough& f_element_wise_b,
@@ -135,8 +135,8 @@ auto multiple_d_gemm(const multi_d_gemm_kargs& args,
     using GemmEpilogue = ck_tile::MultipleDCShuffleEpilogue<
         ck_tile::MultipleDCShuffleEpilogueProblem<AccDataType,
                                                   CDataType,
-                                                  DDataType,
-                                                  DLayout,
+                                                  DsDataType,
+                                                  DsLayout,
                                                   CLayout,
                                                   AddAdd,
                                                   CodegenPipelineProblem::kBlockSize,

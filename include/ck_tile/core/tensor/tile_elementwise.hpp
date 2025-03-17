@@ -59,6 +59,7 @@ CK_TILE_DEVICE auto tile_elementwise_in(const InElementFunc& in_element_func,
     return out_dstr_tensor;
 }
 
+
 template <typename DstrTensors, typename T>
 CK_TILE_DEVICE void set_tile(DstrTensors& dstr_tensor, const T& value)
 {

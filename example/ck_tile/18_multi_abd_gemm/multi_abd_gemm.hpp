@@ -36,7 +36,7 @@ struct GemmBasicTypeConfig<ck_tile::half_t>
     using BDataType         = ck_tile::half_t;
     using D0DataType        = ck_tile::half_t;
     using D1DataType        = ck_tile::half_t;
-    using DsDataType        = D0DataType;
+    using DsDataType        = ck_tile::tuple<D0DataType, D1DataType>;
     using AccDataType       = float;
     using CDataType         = ck_tile::half_t;
 };
@@ -49,10 +49,10 @@ using BDataType   = Types::BDataType;
 using AccDataType = Types::AccDataType;
 using D0DataType   = Types::D0DataType;
 using D1DataType   = Types::D1DataType;
-using DDataType   = Types::DsDataType;
+using DsDataType   = Types::DsDataType;
 using CDataType   = Types::CDataType;
 
-using multi_d_gemm_kargs = ck_tile::MultipleDGemmHostArgs;
+using multi_d_gemm_kargs = ck_tile::MultipleDGemmHostArgs<DsDataType::size()>;
 
 auto create_args(int argc, char* argv[])
 {

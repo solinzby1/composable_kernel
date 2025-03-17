@@ -14,128 +14,149 @@
 #include "ck_tile/ops/epilogue.hpp"
 #include "ck_tile/ops/gemm.hpp"
 #include "ck_tile/host.hpp"
-#include "grouped_gemm.hpp"
+#include "multi_abd_gemm.hpp"
 #include "utils.hpp"
 
-inline namespace {
-
 /**
  * @brief Settings enum for Tile
  */
-enum class TileSetting : int {
-  M = 128,
-  N = 128,
-  K = 32,
+enum TileSetting
+{
+    M1 = 256,
+    N1 = 256,
+    K1 = 32,
 };
 
 /**
  * @brief Settings enum for Tile
  */
-enum class WrapSetting : int {
-  M = 2,
-  N = 2,
-  K = 1,
+enum WrapSetting
+{
+    M2 = 2,
+    N2 = 2,
+    K2 = 1,
 };
 
 /**
  * @brief Settings enum for Tile
  */
-enum class WrapTileSetting : int {
-  M = 32,
-  N = 32,
-  K = 8,
+enum WrapTileSetting
+{
+    M3 = 32,
+    N3 = 32,
+    K3 = 16,
 };
 
 /**
- * @brief The kPadM, kPadN, kPadK & kBlockPerCu 
+ * @brief The kPadM, kPadN, kPadK & kBlockPerCu
  *        should also come from the Codegen part.
  */
-enum class CodeGenPart : bool {
-    kPadM = false;
-    kPadN = false;
-    kPadK = false;
-};
-
-class SequenceMapper {
-  protected:
-  using Seq = ck_tile::sequence; 
-}
-/**
- * @brief Wrapper to keep the shape for a given settings
- */
-template <typename T = TileSetting> class TileShape : public SequenceMapper {
-  using shape = Seq<T::M, T::N, T::K>;
+enum CodeGenPart
+{
+    kPadM = false,
+    kPadN = false,
+    kPadK = false,
 };
 
 /**
  * @brief Wrapper to keep the shape for a given settings
  */
-template <typename T = WrapSetting> class WrapShape : public SequenceMapper {
-  using shape = Seq<T::M, T::N, T::K>;
+template <typename T = TileSetting>
+struct TileShape
+{
+    using shape = ck_tile::sequence<T::M1, T::N1, T::K1>;
 };
 
 /**
  * @brief Wrapper to keep the shape for a given settings
  */
-template <typename T = WrapTileSetting> class WrapTileShape : public SequenceMapper {
-  using shape = Seq<T::M, T::N, T::K>;
+template <typename T = WrapSetting>
+struct WrapShape
+{
+    using shape = ck_tile::sequence<T::M2, T::N2, T::K2>;
+};
+
+/**
+ * @brief Wrapper to keep the shape for a given settings
+ */
+template <typename T = WrapTileSetting>
+struct WrapTileShape
+{
+    using shape = ck_tile::sequence<T::M3, T::N3, T::K3>;
 };
 
 /**
  * @brief Function to run multiple_gemm with multiple D
- * 
+ *
  */
-template <typename ALayout,
-          typename BLayout,
-          typename DsLayout,
-          typename ELayout>
-auto multiple_d_gemm(const void* a_m_k_dev_buf,
-                      const void* b_k_n_dev_buf,
-                      std::array<const void*, 2>& d_m_n_dev_buf,
-                      const void* e_m_n_dev_buf,
-                      ck_tile::index_t M,
-                      ck_tile::index_t N,
-                      ck_tile::index_t K,
-                      ck_tile::index_t StrideAs,
-                      ck_tile::index_t StrideBs,
-                      std::array<ck_tile::index_t, 2> StrideDs,
-                      index_t StrideE,
-                      ck_tile::PassThrough& a_element_op,
-                      ck_tile::PassThrough& b_element_op,
-                      ck_tile::AddAdd& cde_element_op,
-                      const ck_tile::stream_config& s) -> float
+template <typename ALayout, typename BLayout, typename DLayout, typename CLayout>
+auto multiple_d_gemm(const multi_d_gemm_kargs& args,
+                     [[maybe_unused]] ck_tile::element_wise::PassThrough& f_element_wise_a,
+                     [[maybe_unused]] ck_tile::element_wise::PassThrough& f_element_wise_b,
+                     [[maybe_unused]] AddAdd& f_element_wise_d,
+                     [[maybe_unused]] const ck_tile::stream_config& s) -> float
 {
-  // @breif Multiple G gem taks 4 arguments
-  using f_code_gemm_traits  = ck_tile::TileGemmTraits<kPadM, kPadN, kPadK, ALayout, BLayout, DsLayout, ELayout>;
-  //  @breif Get shapes
-  using f_shape  = ck_tile::TileGemmShape<TileShape::shape, WrapShape::shape, WrapTileShape::shape>;
+    // The kPadM, kPadN, kPadK & kBlockPerCu should also come from the Codegen part.
+    constexpr bool kPadM = false;
+    constexpr bool kPadN = false;
+    constexpr bool kPadK = false;
 
-  // TODO(mozga-amd): MutlipleGemm Pipeline requires impl
-  using f_code_gemm_pipeline = ck_tile::MutlipleGemmPipelineProblem<
-            ADataType,
-            BDataType, 
-            DDataType, 
-            AccDataType,
-            f_element_wise_a, // Old ck works only when A element wise is PassThrough
-            f_element_wise_b, // Old ck works only when B element wise is PassThrough
-            f_element_wise_abd, // Old ck works for each of them
-            f_shape, 
-            f_code_gemm_traits>;
+    constexpr int kBlockPerCu = 1;
 
-  using f_gemm_epilogue =
-      ck_tile::CShuffleEpilogue<
-        ck_tile::CShuffleEpilogueProblem<
-            AccDataType, EDataType, ELayout, 
-            CodegenPipelineProblem::kBlockSize,
-            TilePartitioner::MPerBlock, TilePartitioner::NPerBlock,
-            WrapSettings::M_Warp, WrapSettings::N_Warp,
-            WrapTileSettings::M_Warp_Tile, WrapTileSettings::N_Warp_Tile,
-            WrapTileSettings::K_Warp_Tile, f_code_gemm_pipeline::TransposeC>
-        >;
-    
-    // 2D partitioner for that
-    using f_partitioner = ck_tile::GemmTile1DPartitioner<f_shape>;
-    using f_kernel = ck_tile::MultipleDGemmKernel<f_paritioner, f_code_gemm_pipeline, f_epilog>;
+    // This part comes from the Codegen
+    constexpr ck_tile::index_t M_Tile = 128;
+    constexpr ck_tile::index_t N_Tile = 128;
+    constexpr ck_tile::index_t K_Tile = 32;
+
+    constexpr ck_tile::index_t M_Warp = 2;
+    constexpr ck_tile::index_t N_Warp = 2;
+    constexpr ck_tile::index_t K_Warp = 1;
+    //constexpr bool TransposeC = false;
+
+    constexpr ck_tile::index_t M_Warp_Tile = 32;
+    constexpr ck_tile::index_t N_Warp_Tile = 32;
+    constexpr ck_tile::index_t K_Warp_Tile = 8;
+
+    constexpr ck_tile::index_t TileParitionerGroupNum = 8;
+    constexpr ck_tile::index_t TileParitionerM01      = 4;
+
+    // ===============================================
+
+    using CodegenGemmShape =
+        ck_tile::TileGemmShape<ck_tile::sequence<M_Tile, N_Tile, K_Tile>,
+                               ck_tile::sequence<M_Warp, N_Warp, K_Warp>,
+                               ck_tile::sequence<M_Warp_Tile, N_Warp_Tile, K_Warp_Tile>>;
+    using TilePartitioner = ck_tile::GemmSpatiallyLocalTilePartitioner<CodegenGemmShape, TileParitionerGroupNum, TileParitionerM01>;
+
+    using CodegenGemmTraits = ck_tile::TileGemmTraits<kPadM, kPadN, kPadK, ALayout, BLayout, CLayout>;
+    using CodegenPipelineProblem = ck_tile::GemmPipelineProblem<ADataType, BDataType, AccDataType, CodegenGemmShape, CodegenGemmTraits>;
+    using CodegenGemmPipeline = ck_tile::GemmPipelineAGmemBGmemCRegV1<CodegenPipelineProblem>;
+
+    using GemmEpilogue = ck_tile::MultipleDCShuffleEpilogue<
+        ck_tile::MultipleDCShuffleEpilogueProblem<AccDataType,
+                                                  CDataType,
+                                                  DDataType,
+                                                  DLayout,
+                                                  CLayout,
+                                                  AddAdd,
+                                                  CodegenPipelineProblem::kBlockSize,
+                                                  TilePartitioner::MPerBlock,
+                                                  TilePartitioner::NPerBlock,
+                                                  M_Warp,
+                                                  N_Warp,
+                                                  M_Warp_Tile,
+                                                  N_Warp_Tile,
+                                                  K_Warp_Tile,
+                                                  CodegenPipelineProblem::TransposeC>>;
+
+    // ToDo: Will add the codegen part to test different pipeline policies in GEMM.
+    // Now we only use the BlockGemmASmemBSmemCRegV1DefaultPolicy.
+    using Kernel = ck_tile::MultipleDGemmKernel<TilePartitioner, CodegenGemmPipeline, GemmEpilogue>;
+
+    auto kargs = Kernel::MakeKernelArgs(args);
+
+    const dim3 grids      = Kernel::GridSize(args.M, args.N, args.k_batch);
+    constexpr dim3 blocks = Kernel::BlockSize();
 
     if(!Kernel::IsSupportedArgument(kargs))
     {
@@ -155,6 +176,7 @@ auto multiple_d_gemm(const void* a_m_k_dev_buf,
 
     return ave_time;
 }
-#include "run_grouped_gemm_example.inc"
 
-int main(int argc, char* argv[]) { return !run_grouped_gemm_example(argc, argv); }
+#include "run_multi_abd_gemm_example.inc"
+
+int main(int argc, char* argv[]) { return !run_multiple_d_gemm_example(argc, argv); }

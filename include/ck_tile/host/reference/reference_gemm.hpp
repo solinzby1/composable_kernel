@@ -47,6 +47,44 @@ CK_TILE_HOST void reference_gemm(const HostTensor<ADataType>& a_m_k,
     make_ParallelTensorFunctor(f_mn, M, N)(std::thread::hardware_concurrency());
 }
 
+
+template <typename ADataType,
+          typename BDataType,
+          typename DDataType,
+          typename AccDataType,
+          typename CDataType,
+          typename AElementOp   = ck_tile::identity,
+          typename BElementOp   = ck_tile::identity,
+          typename ACCElementOp = ck_tile::identity>
+CK_TILE_HOST void reference_gemm_multiple_d([[maybe_unused]] const HostTensor<ADataType>& a_m_k,
+                                 [[maybe_unused]] const HostTensor<BDataType>& b_k_n,
+                                 [[maybe_unused]] const HostTensor<DDataType>& d_m_n,
+                                 HostTensor<CDataType>& c_m_n,
+                                 const AElementOp& a_element_op     = {},
+                                 const BElementOp& b_element_op     = {},
+                                 const ACCElementOp& acc_element_op = {})
+{
+    const std::size_t M = a_m_k.get_length(0);
+    const std::size_t N = b_k_n.get_length(1);
+    const std::size_t K = a_m_k.get_length(1);
+
+    auto f_mn = [&](auto m, auto n) {
+        AccDataType v_acc = 0;
+        
+        for(std::size_t k = 0; k < K; ++k)
+        {
+            ADataType v_a = a_element_op(a_m_k(m, k));
+            BDataType v_b = b_element_op(b_k_n(k, n));
+
+            v_acc += ck_tile::type_convert<AccDataType>(v_a) * ck_tile::type_convert<AccDataType>(v_b);
+        }
+
+        c_m_n(m, n) = ck_tile::type_convert<CDataType>(acc_element_op(v_acc, d_m_n(m, n)));
+    };
+
+    make_ParallelTensorFunctor(f_mn, M, N)(std::thread::hardware_concurrency());
+}
+
 template <typename ADataType,
           typename BDataType,
           typename AccDataType,

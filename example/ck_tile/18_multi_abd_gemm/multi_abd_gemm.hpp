@@ -7,7 +7,8 @@
 
 #include "ck_tile/core.hpp"
 #include "ck_tile/host/kernel_launch.hpp"
-#include "ck_tile/ops/gemm/kernel/grouped_gemm_kernel.hpp"
+#include "ck_tile/ops/gemm/kernel/mutiple_d_kernel.hpp"
+#include "ck_tile/ops/elementwise/unary_element_wise_operation.hpp"
 
 struct AddAdd
 {
@@ -16,12 +17,12 @@ struct AddAdd
     operator()(E& e, const C& c, const D0& d0, const D1& d1) const;
 
     template <>
-    __host__ __device__ constexpr void operator()<ck::half_t, float, float, float>(
-        ck::half_t& e, const float& c, const float& d0, const float& d1) const
+    __host__ __device__ constexpr void operator()<ck_tile::half_t, float, float, float>(
+        ck_tile::half_t& e, const float& c, const float& d0, const float& d1) const
     {
         const float x0_f = c + d0 + d1;
 
-        e = ck::type_convert<ck::half_t>(x0_f);
+        e = ck_tile::type_convert<ck_tile::half_t>(x0_f);
     }
 };
 
@@ -33,12 +34,11 @@ struct GemmBasicTypeConfig<ck_tile::half_t>
 {
     using ADataType         = ck_tile::half_t;
     using BDataType         = ck_tile::half_t;
-    using CShuffleDataType  = float;
-    using D0DataType        = float;
-    using D1DataType        = float;
-    using DsDataType        = ck::Tuple<D0DataType, D1DataType>;
+    using D0DataType        = ck_tile::half_t;
+    using D1DataType        = ck_tile::half_t;
+    using DsDataType        = D0DataType;
     using AccDataType       = float;
-    using EDataType         = ck_tile::half_t;
+    using CDataType         = ck_tile::half_t;
 };
 
 using Types = GemmBasicTypeConfig<ck_tile::half_t>;
@@ -47,20 +47,14 @@ using Types = GemmBasicTypeConfig<ck_tile::half_t>;
 using ADataType   = Types::ADataType;
 using BDataType   = Types::BDataType;
 using AccDataType = Types::AccDataType;
-using DDataType   = Types::CDataType;
-using EDataType   = Types::EDataType;
+using D0DataType   = Types::D0DataType;
+using D1DataType   = Types::D1DataType;
+using DDataType   = Types::DsDataType;
+using CDataType   = Types::CDataType;
 
-using grouped_gemm_kargs = ck_tile::GroupedGemmHostArgs;
+using multi_d_gemm_kargs = ck_tile::MultipleDGemmHostArgs;
 
-// runtime args
-struct mulit_d_args : public ck_tile::MultiDGemmHostArgs
-{
-};
-
-struct
-
-    auto
-    create_args(int argc, char* argv[])
+auto create_args(int argc, char* argv[])
 {
     ck_tile::ArgParser arg_parser;
     arg_parser.insert("Ms", "", "M dimensions - empty by default.")
@@ -81,18 +75,8 @@ struct
     return std::make_tuple(result, arg_parser);
 }
 
-float multiple_d_gemm(const void* a_m_k_dev_buf,
-                      const void* b_k_n_dev_buf,
-                      std::array<const void*, 2> &d_m_n_dev_buf,
-                      const void* e_m_n_dev_buf,
-                          ck_tile::index_t M,
-                          ck_tile::index_t N,
-                          ck_tile::index_t K,
-                          ck_tile::index_t StrideAs,
-                          ck_tile::index_t StrideBs,
-                          std::array<ck_tile::index_t, 2> StrideDs,
-                          index_t StrideE,
-                          ck_tile::PassThrough &a_element_op,
-                          ck_tile::PassThrough &b_element_op,
-                          ck_tile::AddAdd &cde_element_op, 
-                          const ck_tile::stream_config& s;
+float multiple_d_gemm(const multi_d_gemm_kargs &kargs,
+                        [[maybe_unused]]ck_tile::element_wise::PassThrough& f_element_wise_a,
+                        [[maybe_unused]]ck_tile::element_wise::PassThrough& f_element_wise_b,
+                        [[maybe_unused]]AddAdd& f_element_wise_d,
+                        [[maybe_unused]]const ck_tile::stream_config& s);

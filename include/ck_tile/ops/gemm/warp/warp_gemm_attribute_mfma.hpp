@@ -41,7 +41,7 @@ struct WarpGemmAtrributeMfma
 
     using BWarpDstrEncoding = tile_distribution_encoding<
         sequence<>,
-        tuple<sequence<Impl::kBNLane>, sequence<Impl::kABKLane, Impl::kABKPerLane>>,
+        tuple<sequence<Impl::kBNLane>, sequence<Impl::kABKLane, Impl::kABKPerLane>>,// s1:16   s2:4 8
         tuple<sequence<2, 1>>,
         tuple<sequence<0, 0>>,
         sequence<2>,

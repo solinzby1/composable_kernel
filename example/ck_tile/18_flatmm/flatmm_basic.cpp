@@ -37,8 +37,9 @@ float flatmm_calc(const ck_tile::FlatmmHostArgs& args, const ck_tile::stream_con
     constexpr ck_tile::index_t N_Warp = 4;
     constexpr ck_tile::index_t K_Warp = 1;
 
-    constexpr ck_tile::index_t M_Warp_Tile = 32;
-    constexpr ck_tile::index_t N_Warp_Tile = 32;
+    constexpr ck_tile::index_t M_Warp_Tile = is_8bit_type<ADataType>::value ? 16 : 32;
+    constexpr ck_tile::index_t N_Warp_Tile = is_8bit_type<ADataType>::value ? 16 : 32;
+    //constexpr ck_tile::index_t K_Warp_Tile = 64;
     constexpr ck_tile::index_t K_Warp_Tile = is_8bit_type<ADataType>::value ? 32 : 16;
 
     using CodegenFlatmmShape =
@@ -55,21 +56,32 @@ float flatmm_calc(const ck_tile::FlatmmHostArgs& args, const ck_tile::stream_con
                                                                 AccDataType,
                                                                 CodegenFlatmmShape,
                                                                 CodegenGemmTraits>;
-    using GemmEpilogue           = ck_tile::CShuffleEpilogue<
-        ck_tile::CShuffleEpilogueProblem<ADataType,
-                                         BDataType,
-                                         AccDataType,
+    // using GemmEpilogue           = ck_tile::CShuffleEpilogue<
+    //     ck_tile::CShuffleEpilogueProblem<ADataType,
+    //                                      BDataType,
+    //                                      AccDataType,
+    //                                      CDataType,
+    //                                      CLayout,
+    //                                      CodegenPipelineProblem::kBlockSize,
+    //                                      TilePartitioner::MPerBlock,
+    //                                      TilePartitioner::NPerBlock,
+    //                                      M_Warp,
+    //                                      N_Warp,
+    //                                      M_Warp_Tile,
+    //                                      N_Warp_Tile,
+    //                                      K_Warp_Tile,
+    //                                      CodegenPipelineProblem::TransposeC>>;
+    using GemmEpilogue        = ck_tile::DefaultGemm2DEpilogue<
+        ck_tile::DefaultGemm2DEpilogueProblem<AccDataType,
                                          CDataType,
                                          CLayout,
-                                         CodegenPipelineProblem::kBlockSize,
-                                         TilePartitioner::MPerBlock,
-                                         TilePartitioner::NPerBlock,
-                                         M_Warp,
-                                         N_Warp,
+                                         kPadM,
+                                         kPadN,
                                          M_Warp_Tile,
                                          N_Warp_Tile,
                                          K_Warp_Tile,
-                                         CodegenPipelineProblem::TransposeC>>;
+                                         CodegenPipelineProblem::TransposeC,
+                                         false>>;
 
     using CodegenFlatmmPolicy = ck_tile::UniversalFlatmmPipelineAgBgCrPolicy;
     using CodegenFlatmmPipeline =
@@ -122,11 +134,11 @@ int run_flatmm_example(int argc, char* argv[])
     {
         if(data_type == "fp16")
         {
-            run_flatmm_example_with_layouts<ck_tile::half_t>(argc, argv, Row{}, Col{}, Row{});
+            //run_flatmm_example_with_layouts<ck_tile::half_t>(argc, argv, Row{}, Col{}, Row{});
         }
         else if(data_type == "bf16")
         {
-            run_flatmm_example_with_layouts<ck_tile::bf16_t>(argc, argv, Row{}, Col{}, Row{});
+            //run_flatmm_example_with_layouts<ck_tile::bf16_t>(argc, argv, Row{}, Col{}, Row{});
         }
         else if(data_type == "fp8")
         {
@@ -134,7 +146,7 @@ int run_flatmm_example(int argc, char* argv[])
         }
         else if(data_type == "bf8")
         {
-            run_flatmm_example_with_layouts<ck_tile::bf8_t>(argc, argv, Row{}, Col{}, Row{});
+            //run_flatmm_example_with_layouts<ck_tile::bf8_t>(argc, argv, Row{}, Col{}, Row{});
         }
         else
         {

@@ -4,6 +4,7 @@
 #pragma once
 
 #include "ck_tile/core.hpp"
+#include <type_traits>
 namespace ck_tile {
 
 template <typename WarpGemmAttribute_>
@@ -24,6 +25,12 @@ struct WarpGemmImpl
     using BDataType = typename WarpGemmAttribute::BDataType;
     using CDataType = typename WarpGemmAttribute::CDataType;
 
+
+    // static_assert(
+    //     std::is_same_v<ADataType, ck_tile::fp8_t> && 
+    //     std::is_same_v<BDataType, ck_tile::fp8_t> &&
+    //     std::is_same_v<CDataType, half>
+    // );
     using AWarpDstrEncoding = typename WarpGemmAttribute::AWarpDstrEncoding;
     using BWarpDstrEncoding = typename WarpGemmAttribute::BWarpDstrEncoding;
     using CWarpDstrEncoding = typename WarpGemmAttribute::CWarpDstrEncoding;
@@ -48,9 +55,15 @@ struct WarpGemmImpl
         static_assert(detail::is_similiar_distributed_tensor_v<CTensor, CWarpTensor> &&
                       detail::is_similiar_distributed_tensor_v<ATensor, AWarpTensor> &&
                       detail::is_similiar_distributed_tensor_v<BTensor, BWarpTensor>);
+        // using AVec = ext_vector_t<ADataType, ATensor::get_thread_buffer_size()>;
+        // using BVec = ext_vector_t<BDataType, BTensor::get_thread_buffer_size()>;
+        // using CVec = ext_vector_t<CDataType, CTensor::get_thread_buffer_size()>;
         using AVec = ext_vector_t<ADataType, ATensor::get_thread_buffer_size()>;
         using BVec = ext_vector_t<BDataType, BTensor::get_thread_buffer_size()>;
         using CVec = ext_vector_t<CDataType, CTensor::get_thread_buffer_size()>;
+        static_assert(ATensor::get_thread_buffer_size() == 8 &&
+		      BTensor::get_thread_buffer_size() == 8 &&
+	              CTensor::get_thread_buffer_size() == 4);
 
         constexpr auto I0 = number<0>{};
 

@@ -134,7 +134,7 @@ struct FlatmmPipelineAGmemBGmemCRegV1
         using WG = remove_cvref_t<decltype(config.template at<0>())>;
 
         // constexpr index_t MWarp = config.template at<1>();
-        constexpr index_t NWarp = config.template at<2>();
+        constexpr index_t NWarp = config.template at<2>(); //4
 
         constexpr index_t KIterPerWarp = kKPerBlock / WG::kK;
         constexpr index_t NIterPerWarp = kNPerBlock / (NWarp * WG::kN);

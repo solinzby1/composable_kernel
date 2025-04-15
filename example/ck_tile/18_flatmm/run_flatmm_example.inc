@@ -31,30 +31,38 @@ auto shuffle_b(const ck_tile::HostTensor<T>& t, std::string mfma_dtype, int mfma
     int n_ = t.get_lengths()[1];
     int k_ = t.get_lengths()[0];
 
-    if((mfma_dtype == "bf16" || mfma_dtype == "fp16") && mfma_type == 0)
-    {
-        ck_tile::HostTensor<T> t_view({n_ / 32, 32, k_ / 16, 2, 8});
-        std::copy(t.begin(), t.end(), t_view.begin());
-        return ck_tile::reference_permute(t_view, {0, 2, 3, 1, 4});
-    }
-    else if((mfma_dtype == "bf16" || mfma_dtype == "fp16") && mfma_type == 1)
-    {
-        ck_tile::HostTensor<T> t_view({n_ / 16, 16, k_ / 32, 4, 8});
-        std::copy(t.begin(), t.end(), t_view.begin());
-        return ck_tile::reference_permute(t_view, {0, 2, 3, 1, 4});
-    }
-    else if((mfma_dtype == "int8" || mfma_dtype == "fp8" || mfma_dtype == "bf8") && mfma_type == 0)
-    {
-        ck_tile::HostTensor<T> t_view({n_ / 32, 32, k_ / 32, 2, 16});
-        std::copy(t.begin(), t.end(), t_view.begin());
-        return ck_tile::reference_permute(t_view, {0, 2, 3, 1, 4});
-    }
-    else if((mfma_dtype == "int8" || mfma_dtype == "fp8" || mfma_dtype == "bf8") && mfma_type == 1)
+    if((mfma_dtype == "int8" || mfma_dtype == "fp8" || mfma_dtype == "bf8") && mfma_type == 1)
     {
         ck_tile::HostTensor<T> t_view({n_ / 16, 16, k_ / 64, 4, 16});
         std::copy(t.begin(), t.end(), t_view.begin());
         return ck_tile::reference_permute(t_view, {0, 2, 3, 1, 4});
     }
+
+
+    // if((mfma_dtype == "bf16" || mfma_dtype == "fp16") && mfma_type == 0)
+    // {
+    //     ck_tile::HostTensor<T> t_view({n_ / 32, 32, k_ / 16, 2, 8});
+    //     std::copy(t.begin(), t.end(), t_view.begin());
+    //     return ck_tile::reference_permute(t_view, {0, 2, 3, 1, 4});
+    // }
+    // else if((mfma_dtype == "bf16" || mfma_dtype == "fp16") && mfma_type == 1)
+    // {
+    //     ck_tile::HostTensor<T> t_view({n_ / 16, 16, k_ / 32, 4, 8});
+    //     std::copy(t.begin(), t.end(), t_view.begin());
+    //     return ck_tile::reference_permute(t_view, {0, 2, 3, 1, 4});
+    // }
+    // else if((mfma_dtype == "int8" || mfma_dtype == "fp8" || mfma_dtype == "bf8") && mfma_type == 0)
+    // {
+    //     ck_tile::HostTensor<T> t_view({n_ / 32, 32, k_ / 32, 2, 16});
+    //     std::copy(t.begin(), t.end(), t_view.begin());
+    //     return ck_tile::reference_permute(t_view, {0, 2, 3, 1, 4});
+    // }
+    // else if((mfma_dtype == "int8" || mfma_dtype == "fp8" || mfma_dtype == "bf8") && mfma_type == 1)
+    // {
+    //     ck_tile::HostTensor<T> t_view({n_ / 16, 16, k_ / 64, 4, 16});
+    //     std::copy(t.begin(), t.end(), t_view.begin());
+    //     return ck_tile::reference_permute(t_view, {0, 2, 3, 1, 4});
+    // }
     return t;
 }
 

@@ -32,6 +32,7 @@ struct static_distributed_tensor
 
     static constexpr index_t kThreadElementSpaceSize = ThreadTensorDesc{}.get_element_space_size();
     static_assert(0 < kThreadElementSpaceSize, "Make sure tile distribution is valid");
+    //static_assert(kThreadElementSpaceSize == 8);
 
     CK_TILE_HOST_DEVICE static constexpr auto get_num_of_dimension()
     {
@@ -224,6 +225,9 @@ struct is_similiar_distributed_tensor<static_distributed_tensor<TypeX, DistX>,
     using Ty                    = static_distributed_tensor<TypeY, DistY>;
     static constexpr bool value = std::is_same_v<typename Tx::DataType, typename Ty::DataType> &&
                                   Tx::get_thread_buffer_size() == Ty::get_thread_buffer_size();
+    static_assert(std::is_same_v<typename Tx::DataType, typename Ty::DataType>);
+    // static_assert(Tx::get_thread_buffer_size() == 8);
+    // static_assert(Ty::get_thread_buffer_size() == 8);
 };
 
 template <typename X, typename Y>

@@ -30,6 +30,8 @@ struct WarpGemmAtrributeMfma
 
     static_assert(Impl::kAMBlock == 1 && Impl::kBNBlock == 1,
                   "Multi-block WarpGemmAttributeMfmaImpl is not supported");
+    static_assert(Impl::kM == 16 && Impl::kN == 16 && Impl::kK == 32,"m n k check");
+    static_assert(Impl::kBNLane == 16 && Impl::kABKLane == 4 && Impl::kABKPerLane == 8,"b check");
 
     using AWarpDstrEncoding = tile_distribution_encoding<
         sequence<>,

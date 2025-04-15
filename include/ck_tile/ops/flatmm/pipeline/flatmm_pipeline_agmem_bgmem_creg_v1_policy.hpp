@@ -83,6 +83,7 @@ struct UniversalFlatmmPipelineAgBgCrPolicy
             constexpr index_t KPack = GetSmemPackA<Problem>();
             static_assert(KPack % K3 == 0);
             constexpr index_t K2 = KPack / K3;
+            //static_assert(K2 * M0 <= get_warp_size(),"fail");
             if constexpr(get_warp_size() >= (K2 * M0))
             {
                 constexpr index_t K1 = get_warp_size() / (K2 * M0);
@@ -113,6 +114,7 @@ struct UniversalFlatmmPipelineAgBgCrPolicy
         }
         else
         {
+
             constexpr index_t K1 = 16 / sizeof(ADataType);
             constexpr index_t K0 = KPerBlock / K1;
             constexpr index_t M2 = get_warp_size() / K0;
@@ -160,9 +162,9 @@ struct UniversalFlatmmPipelineAgBgCrPolicy
 
         using TileShape = typename Problem::BlockGemmShape; // ck_tile::TileFlatmmShape
 
-        constexpr index_t BlockSize = Problem::kBlockSize;
-        constexpr index_t WaveSize  = get_warp_size();
-        constexpr index_t WaveNum   = BlockSize / WaveSize;
+        constexpr index_t BlockSize = Problem::kBlockSize;//256
+        constexpr index_t WaveSize  = get_warp_size();//64
+        constexpr index_t WaveNum   = BlockSize / WaveSize;//4
 
         constexpr index_t KBPerLoad =
             Problem::VectorLoadSize / sizeof(BDataType); // dwordx4 load B elem cnt

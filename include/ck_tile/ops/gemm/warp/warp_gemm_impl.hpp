@@ -62,8 +62,8 @@ struct WarpGemmImpl
         using BVec = ext_vector_t<BDataType, BTensor::get_thread_buffer_size()>;
         using CVec = ext_vector_t<CDataType, CTensor::get_thread_buffer_size()>;
         static_assert(ATensor::get_thread_buffer_size() == 8 &&
-		      BTensor::get_thread_buffer_size() == 8 &&
-	              CTensor::get_thread_buffer_size() == 4);
+		            BTensor::get_thread_buffer_size() == 8 &&
+	                CTensor::get_thread_buffer_size() == 4);
 
         constexpr auto I0 = number<0>{};
 
